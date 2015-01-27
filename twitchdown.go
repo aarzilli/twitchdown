@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/aarzilli/m3u"
+	"github.com/ushis/m3u"
 	"io"
 	"io/ioutil"
 	"net/http"
