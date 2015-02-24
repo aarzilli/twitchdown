@@ -109,15 +109,26 @@ func parseVideoId(arg string) int {
 	return -1
 }
 
-func setupOutput(videoId int) io.WriteCloser {
+func setupOutput(videoId int, name string) io.WriteCloser {
+	if name != "" {
+	fh, err := os.Create(fmt.Sprintf("%s.ts", name))
+	must(err, "Could not create output file")
+	return fh
+	} else {
 	fh, err := os.Create(fmt.Sprintf("%d.ts", videoId))
 	must(err, "Could not create output file")
 	return fh
+	}
+	
 }
 
-func downloadStream(playlist m3u.Playlist, w io.Writer) {
-	for i := range playlist {
-		fmt.Printf("\rDownloading part %d of %d...", i, len(playlist))
+func downloadStream(playlist m3u.Playlist, w io.Writer, startPosition int, endPosition int) {
+	end := len(playlist)
+	if endPosition != -1 {
+		end = endPosition
+	}
+	for i := startPosition; i <= end; i++ {
+		fmt.Printf("\rDownloading part %d of %d and stopping at %d..", i, len(playlist), end)
 		resp, err := http.Get(playlist[i].Path)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error while downloading: %v\n", err)
@@ -135,7 +146,9 @@ func downloadStream(playlist m3u.Playlist, w io.Writer) {
 
 func main() {
 	quality := flag.String("q", "high", "Selects video quality (defaults to 'high')")
-
+	position := flag.Int("p", 0, "Selects starting position (defaults to 0)")
+	end := flag.Int("e", -1, "Selects ending position (defaults to full vod)")
+	name := flag.String("n", "", "Defines a name to save as (defaults to vod number)")
 	flag.Parse()
 	args := flag.Args()
 
@@ -147,13 +160,17 @@ func main() {
 
 	videoId := parseVideoId(args[0])
 
+	_ = position
 	_ = quality
+	_ = name
+	_ = end 
+
 
 	sig, token := getAccessToken(videoId)
 	//fmt.Printf("sig=%s\ntoken=%s\n", sig, token)
 	playlist := getPlaylist(videoId, *quality, sig, token)
 
-	w := setupOutput(videoId)
+	w := setupOutput(videoId, *name)
 	defer w.Close()
-	downloadStream(playlist, w)
+	downloadStream(playlist, w, *position, *end)
 }
