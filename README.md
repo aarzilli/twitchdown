@@ -6,7 +6,7 @@ Usage:
 	
 Note: only videos served from the HTTP Live Streaming system are supported, ie the url must contain /v/. Videos served from the old system can be downloaded with a plethora of other tools.
 
-Use starting position to resume broken downloads and ending position to download a specific potion of the vod
+Use starting position to resume broken downloads and ending position to download a specific portion of the vod
 
 Sorry if any unforgivable mistakes were made. I've zero previous experience in Go.
 
