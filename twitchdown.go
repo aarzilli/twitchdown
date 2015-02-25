@@ -111,19 +111,19 @@ func parseVideoId(arg string) int {
 
 func setupOutput(videoId int, name string) io.WriteCloser {
 	if name != "" {
-	fh, err := os.Create(fmt.Sprintf("%s.ts", name))
-	must(err, "Could not create output file")
-	return fh
+		fh, err := os.Create(fmt.Sprintf("%s.ts", name))
+		must(err, "Could not create output file")
+		return fh
 	} else {
-	fh, err := os.Create(fmt.Sprintf("%d.ts", videoId))
-	must(err, "Could not create output file")
-	return fh
+		fh, err := os.Create(fmt.Sprintf("%d.ts", videoId))
+		must(err, "Could not create output file")
+		return fh
 	}
-	
+
 }
 
 func downloadStream(playlist m3u.Playlist, w io.Writer, startPosition int, endPosition int) {
-	end := len(playlist)
+	end := len(playlist) - 1
 	if endPosition != -1 {
 		end = endPosition
 	}
@@ -159,12 +159,6 @@ func main() {
 	}
 
 	videoId := parseVideoId(args[0])
-
-	_ = position
-	_ = quality
-	_ = name
-	_ = end 
-
 
 	sig, token := getAccessToken(videoId)
 	//fmt.Printf("sig=%s\ntoken=%s\n", sig, token)
