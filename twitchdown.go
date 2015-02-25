@@ -123,7 +123,7 @@ func setupOutput(videoId int, name string) io.WriteCloser {
 }
 
 func downloadStream(playlist m3u.Playlist, w io.Writer, startPosition int, endPosition int) {
-	end := len(playlist)
+	end := len(playlist) - 1
 	if endPosition != -1 {
 		end = endPosition
 	}
