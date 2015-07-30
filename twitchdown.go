@@ -83,6 +83,12 @@ func getPlaylist(videoId int, quality string, sig, token string) m3u.Playlist {
 			playlistUrl = playlists[i].Path
 		}
 	}
+	
+	if playlistUrl == "" && quality == "source" && len(playlists) > 0 {
+		v := strings.Split(playlists[0].Path, "/")
+		v[7] = "chunked"
+		playlistUrl = strings.Join(v, "/")
+	}
 
 	if playlistUrl == "" {
 		fmt.Fprintf(os.Stderr, "Could not find requested quality: %v\n", qualities)
@@ -189,7 +195,7 @@ func continueDownload(fileName string, playlist m3u.Playlist) (int, io.WriteClos
 
 func main() {
 	continueDld := flag.Bool("c", false, "Continues interrupted download")
-	quality := flag.String("q", "high", "Selects video quality (defaults to 'high')")
+	quality := flag.String("q", "high", "Selects video quality (defaults to 'high'). 'source' quality is not reported by twitch but still can be selected")
 	position := flag.Int("p", 0, "Selects starting position (defaults to 0)")
 	end := flag.Int("e", -1, "Selects ending position (defaults to full vod)")
 	name := flag.String("n", "", "Defines a name to save as (defaults to vod number)")

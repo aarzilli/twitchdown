@@ -11,3 +11,4 @@ CONTRIBUTORS
 ---------------------
 * Alessandro Arzilli  (aarzilli)
 * kareem-hewady
+* Vyacheslav (SlNPacifist)
