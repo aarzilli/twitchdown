@@ -33,6 +33,11 @@ type AccessResponse struct {
 	Token string `json:"token"`
 }
 
+type DownloadResult struct {
+	Id int
+	Body io.ReadCloser
+}
+
 func getAccessToken(videoId int) (sig, token string) {
 	resp, err := http.Get(fmt.Sprintf("https://api.twitch.tv/api/vods/%d/access_token?as3=t", videoId))
 	must(err, "Could not get access token")
@@ -118,18 +123,42 @@ func setupOutput(fileName string) io.WriteCloser {
 	return fh
 }
 
-func downloadStream(playlist m3u.Playlist, w io.Writer, startPosition int, endPosition int) {
+func downloadPart(url string, id int, c chan DownloadResult) {
+	resp, err := http.Get(url)
+	must(err, "Error while downloading")
+	c <- DownloadResult{id, resp.Body}
+}
+
+func downloadStream(playlist m3u.Playlist, w io.Writer, startPosition int, endPosition int, threadCount int) {
 	end := len(playlist) - 1
 	if endPosition != -1 {
 		end = endPosition
 	}
-	for i := startPosition; i <= end; i++ {
-		fmt.Printf("\rDownloading part %d of %d and stopping at %d..", i, len(playlist), end)
-		resp, err := http.Get(playlist[i].Path)
-		must(err, "Error while downloading")
-		_, err = io.Copy(w, resp.Body)
-		resp.Body.Close()
-		must(err, "Error while downloading")
+	if threadCount > (end - startPosition + 1) {
+		threadCount = end - startPosition + 1
+	}
+	c := make(chan DownloadResult)
+	fmt.Printf("Downloading parts %d - %d of %d\n", startPosition, end, len(playlist))
+	for i := startPosition; i <= startPosition + threadCount; i++ {
+		go downloadPart(playlist[i].Path, i, c)
+	}
+	buffer := make([]io.ReadCloser, len(playlist))
+	partToWrite := startPosition
+	partToDownload := startPosition + threadCount
+	for partToWrite <= end {
+		res := <-c
+		buffer[res.Id] = res.Body
+		for partToWrite <= end && buffer[partToWrite] != nil {
+			fmt.Printf("\rDownloaded part %d", partToWrite)
+			_, err := io.Copy(w, buffer[partToWrite])
+			buffer[partToWrite].Close()
+			must(err, "Error while saving")
+			partToWrite++
+		}
+		if (partToDownload <= end) {
+			go downloadPart(playlist[partToDownload].Path, partToDownload, c)
+			partToDownload++
+		}
 	}
 	fmt.Printf("\nDone\n")
 }
@@ -193,6 +222,7 @@ func main() {
 	position := flag.Int("p", 0, "Selects starting position (defaults to 0)")
 	end := flag.Int("e", -1, "Selects ending position (defaults to full vod)")
 	name := flag.String("n", "", "Defines a name to save as (defaults to vod number)")
+	threadCount := flag.Int("t", 1, "Defines number of concurrent downloads. Does not work for continued downloads")
 	flag.Parse()
 	args := flag.Args()
 
@@ -230,5 +260,5 @@ func main() {
 		w = setupOutput(fileName)
 	}
 	defer w.Close()
-	downloadStream(playlist, w, *position, *end)
+	downloadStream(playlist, w, *position, *end, *threadCount)
 }
