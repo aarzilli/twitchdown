@@ -18,7 +18,7 @@ import (
 
 const DEBUG = false
 
-var TwitchUrl = regexp.MustCompile(`^https?://(?:www\.)?twitch\.tv/[^/]+/v/(\d+)`)
+var TwitchUrl = regexp.MustCompile(`^https?://(?:www\.|secure\.)?twitch\.tv/[^/]+/v/(\d+)`)
 var PartUrl = regexp.MustCompile(`\?start_offset=(\d+)&end_offset=(\d+)$`)
 
 func must(err error, msg string) {
