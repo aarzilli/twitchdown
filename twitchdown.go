@@ -81,7 +81,12 @@ func getPlaylist(videoId int, quality string, sig, token string) m3u.Playlist {
 
 	for i := range playlists {
 		v := strings.Split(playlists[i].Path, "/")
-		q := v[7]
+		var q string
+		if len(v) == 6 {
+			q = v[4]
+		} else {
+			q = v[7]
+		}
 		qualities = append(qualities, q)
 
 		if q == quality {
