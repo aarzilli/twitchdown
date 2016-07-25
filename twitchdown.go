@@ -20,6 +20,7 @@ const DEBUG = false
 
 var TwitchUrl = regexp.MustCompile(`^https?://(?:www\.|secure\.)?twitch\.tv/[^/]+/v/(\d+)`)
 var PartUrl = regexp.MustCompile(`\?start_offset=(\d+)&end_offset=(\d+)$`)
+var PartUrl2 = regexp.MustCompile(`-(\d+).ts$`)
 
 func must(err error, msg string) {
 	if err != nil {
@@ -34,7 +35,7 @@ type AccessResponse struct {
 }
 
 type DownloadResult struct {
-	Id int
+	Id   int
 	Body io.ReadCloser
 }
 
@@ -93,7 +94,7 @@ func getPlaylist(videoId int, quality string, sig, token string) m3u.Playlist {
 			playlistUrl = playlists[i].Path
 		}
 	}
-	
+
 	if playlistUrl == "" && quality == "source" && len(playlists) > 0 {
 		v := strings.Split(playlists[0].Path, "/")
 		v[7] = "chunked"
@@ -150,7 +151,7 @@ func downloadStream(playlist m3u.Playlist, w io.Writer, startPosition int, endPo
 	}
 	c := make(chan DownloadResult)
 	fmt.Printf("Downloading parts %d - %d of %d\n", startPosition, end, len(playlist))
-	for i := startPosition; i <= startPosition + threadCount; i++ {
+	for i := startPosition; i <= startPosition+threadCount; i++ {
 		go downloadPart(playlist[i].Path, i, c)
 	}
 	buffer := make([]io.ReadCloser, len(playlist))
@@ -166,7 +167,7 @@ func downloadStream(playlist m3u.Playlist, w io.Writer, startPosition int, endPo
 			must(err, "Error while saving")
 			partToWrite++
 		}
-		if (partToDownload <= end) {
+		if partToDownload <= end {
 			go downloadPart(playlist[partToDownload].Path, partToDownload, c)
 			partToDownload++
 		}
@@ -186,21 +187,32 @@ func continueDownload(fileName string, playlist m3u.Playlist) (int, io.WriteClos
 	fi, err := fh.Stat()
 	must(err, "Can not stat output file")
 	dldSz := fi.Size()
+
+	ok, idx, out := continueDownloadOld(dldSz, playlist, fh)
+	if ok {
+		return idx, out
+	}
+
+	return continueDownloadNew(dldSz, playlist, fh)
+
+}
+
+func continueDownloadOld(dldSz int64, playlist m3u.Playlist, fh io.WriteCloser) (bool, int, io.WriteCloser) {
 	acc := int64(0)
 
 	for i := range playlist {
+		var partSz int64
+
 		m := PartUrl.FindStringSubmatch(playlist[i].Path)
 		if m == nil || len(m) != 3 {
-			fmt.Printf("Failed to parse part url, can not continue download\n")
-			os.Exit(1)
+			return false, 0, nil
 		}
-
 		startOffset, err := strconv.Atoi(m[1])
 		must(err, "Failed to parse part url, can not continue download")
 		endOffset, err := strconv.Atoi(m[2])
 		must(err, "Failed to parse part url, can not continue download")
 
-		partSz := int64((endOffset - startOffset) + 1)
+		partSz = int64((endOffset - startOffset) + 1)
 
 		if acc+partSz > dldSz {
 			toSkip := dldSz - acc
@@ -217,9 +229,60 @@ func continueDownload(fileName string, playlist m3u.Playlist) (int, io.WriteClos
 			_, err = fh.Write(bs[toSkip:])
 			must(err, "Error while downloading")
 
-			return i + 1, fh
+			return true, i + 1, fh
 		}
 		acc += partSz
+	}
+
+	fmt.Fprintf(os.Stderr, "Nothing new to continue\n")
+	os.Exit(0)
+	return true, 0, nil
+}
+
+func continueDownloadNew(dldSz int64, playlist m3u.Playlist, fh io.WriteCloser) (int, io.WriteCloser) {
+	lastStartOffset := int64(0)
+	segmentOffset := int64(0)
+	for i := range playlist {
+		m := PartUrl2.FindStringSubmatch(playlist[i].Path)
+		if m == nil || len(m) != 2 {
+			fmt.Fprintf(os.Stderr, "could not continue download, could not parse part url")
+			os.Exit(1)
+			return 0, nil
+		}
+
+		z, err := strconv.Atoi(m[1])
+		must(err, "Atoi")
+		startOffset := int64(z)
+
+		if startOffset == 0 && i != 0 {
+			segmentOffset = lastStartOffset
+			resp, err := http.Head(playlist[i-1].Path)
+			must(err, "HEAD")
+			segmentOffset += int64(resp.ContentLength)
+		}
+
+		startOffset += segmentOffset
+
+		lastStartOffset = startOffset
+
+		if int64(startOffset) > dldSz {
+			toSkip := int64(startOffset) - dldSz
+
+			if DEBUG {
+				fmt.Printf("Download continues from part %d, skipping %d bytes\n", i-1, toSkip)
+			}
+
+			resp, err := http.Get(playlist[i-1].Path)
+			must(err, "Error while downloading")
+			defer resp.Body.Close()
+			bs, err := ioutil.ReadAll(resp.Body)
+			must(err, "Error while downloading")
+
+			_, err = fh.Write(bs[toSkip:])
+			must(err, "Error while downloading")
+
+			return i, fh
+		}
 	}
 
 	fmt.Fprintf(os.Stderr, "Nothing new to continue\n")
