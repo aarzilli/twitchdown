@@ -1,0 +1,13 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"checksumSHA1": "zdRqJu50X6CEGkE4DrThObRcGCo=",
+			"path": "github.com/ushis/m3u",
+			"revision": "94396b78473336aac9b3ab13d10537904a6a69c3",
+			"revisionTime": "2015-01-27T16:28:43Z"
+		}
+	],
+	"rootPath": "github.com/aarzilli/twitchdown"
+}
