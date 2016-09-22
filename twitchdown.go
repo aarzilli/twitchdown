@@ -39,16 +39,22 @@ type DownloadResult struct {
 	Body io.ReadCloser
 }
 
+func Get(url string) (*http.Response, error) {
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Add("Client-ID", "jzkbprff40iqj646a697cyrvl0zt2m6")
+	return http.DefaultClient.Do(req)
+}
+
 func getAccessToken(videoId int) (sig, token string) {
-	resp, err := http.Get(fmt.Sprintf("https://api.twitch.tv/api/vods/%d/access_token?as3=t", videoId))
+	resp, err := Get(fmt.Sprintf("https://api.twitch.tv/api/vods/%d/access_token?adblock=false&need_https=false&platform=web&player_type=site", videoId))
 	must(err, "Could not get access token")
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		fmt.Fprintf(os.Stderr, "Received status code %d while getting access token\n", resp.StatusCode)
-		os.Exit(1)
-	}
 	respb, err := ioutil.ReadAll(resp.Body)
 	must(err, "Could not read access token")
+	if resp.StatusCode != 200 {
+		fmt.Fprintf(os.Stderr, "Received status code %d while getting access token: %v\n", resp.StatusCode, string(respb))
+		os.Exit(1)
+	}
 	var r AccessResponse
 	must(json.Unmarshal(respb, &r), "Could not decode access token response")
 	return r.Sig, r.Token
@@ -57,7 +63,7 @@ func getAccessToken(videoId int) (sig, token string) {
 func dldPlaylist(url string) m3u.Playlist {
 	uurl, err := neturl.Parse(url)
 	must(err, fmt.Sprintf("Invalid url: %s", url))
-	resp, err := http.Get(url)
+	resp, err := Get(url)
 	must(err, fmt.Sprintf("Could not get %s", url))
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
@@ -136,7 +142,7 @@ func setupOutput(fileName string) io.WriteCloser {
 }
 
 func downloadPart(url string, id int, c chan DownloadResult) {
-	resp, err := http.Get(url)
+	resp, err := Get(url)
 	must(err, "Error while downloading")
 	c <- DownloadResult{id, resp.Body}
 }
@@ -220,7 +226,7 @@ func continueDownloadOld(dldSz int64, playlist m3u.Playlist, fh io.WriteCloser) 
 				fmt.Printf("Download continues from part %d, skipping %d bytes\n", i, toSkip)
 			}
 
-			resp, err := http.Get(playlist[i].Path)
+			resp, err := Get(playlist[i].Path)
 			must(err, "Error while downloading")
 			defer resp.Body.Close()
 			bs, err := ioutil.ReadAll(resp.Body)
@@ -272,7 +278,7 @@ func continueDownloadNew(dldSz int64, playlist m3u.Playlist, fh io.WriteCloser) 
 				fmt.Printf("Download continues from part %d, skipping %d bytes\n", i-1, toSkip)
 			}
 
-			resp, err := http.Get(playlist[i-1].Path)
+			resp, err := Get(playlist[i-1].Path)
 			must(err, "Error while downloading")
 			defer resp.Body.Close()
 			bs, err := ioutil.ReadAll(resp.Body)
